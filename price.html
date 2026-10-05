@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>商場購物即時算</title>
+  <title>商場購物即時算 - 增強辨識版</title>
   
   <!-- iOS PWA 支援 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="購物加總器">
   <meta name="theme-color" content="#2563eb">
   
-  <!-- Tesseract.js 瀏覽器端 OCR 引擎 -->
+  <!-- Tesseract.js -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <style>
@@ -142,6 +142,13 @@
       background: #1d4ed8;
     }
 
+    .tip-box {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: #64748b;
+      line-height: 1.4;
+    }
+
     .ocr-status {
       margin-top: 14px;
       font-size: 0.9rem;
@@ -196,7 +203,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .modal-title {
@@ -215,13 +222,23 @@
       color: #64748b;
     }
 
-    .preview-img {
+    .preview-container {
+      position: relative;
       width: 100%;
-      max-height: 160px;
-      object-fit: contain;
-      background: #000;
+      max-height: 180px;
+      background: #0f172a;
       border-radius: 12px;
-      margin-bottom: 16px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .preview-img {
+      max-width: 100%;
+      max-height: 180px;
+      object-fit: contain;
     }
 
     .candidates-label {
@@ -235,7 +252,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .price-chip {
@@ -243,21 +260,22 @@
       border: 2px solid #bfdbfe;
       color: #1d4ed8;
       border-radius: 12px;
-      padding: 10px 16px;
-      font-size: 1.1rem;
+      padding: 10px 18px;
+      font-size: 1.15rem;
       font-weight: 800;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 4px;
-      transition: all 0.2s;
+      transition: all 0.15s;
     }
 
     .price-chip.recommended {
       background: #2563eb;
       border-color: #2563eb;
       color: white;
-      box-shadow: 0 3px 8px rgba(37, 99, 235, 0.3);
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);
+      transform: scale(1.02);
     }
 
     .price-chip:active {
@@ -266,13 +284,12 @@
 
     .manual-entry {
       display: flex;
-      gap: 10px;
-      margin-top: 12px;
+      gap: 8px;
+      margin-top: 10px;
     }
 
     .input-field {
-      flex: 1;
-      padding: 12px 14px;
+      padding: 12px 12px;
       border: 1.5px solid #cbd5e1;
       border-radius: 12px;
       font-size: 1rem;
@@ -287,11 +304,16 @@
       background: #10b981;
       color: white;
       border: none;
-      padding: 12px 20px;
+      padding: 12px 18px;
       border-radius: 12px;
       font-weight: 700;
       font-size: 1rem;
       cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn-add:active {
+      background: #059669;
     }
 
     .cart-header {
@@ -441,18 +463,18 @@
   <header>
     <div class="header-title">
       <span>🛒 購物即時算 (PWA)</span>
-      <span style="font-size: 0.85rem; opacity: 0.9; font-weight: normal;">離線支援</span>
+      <span style="font-size: 0.85rem; opacity: 0.9; font-weight: normal;">高對比增強版</span>
     </div>
     <div class="budget-card">
       <div class="budget-col">
-        <span class="budget-label">💵 攜帶現金 (預算)</span>
+        <span class="budget-label">💵 攜帶現金 (上限)</span>
         <div class="budget-input-wrapper">
           <span>$</span>
           <input type="number" id="budgetInput" class="budget-input" placeholder="例如 1000" inputmode="numeric">
         </div>
       </div>
       <div class="budget-col" style="text-align: right;">
-        <span class="budget-label">剩餘可用金額</span>
+        <span class="budget-label">剩餘金額</span>
         <div id="remainingCash" class="remaining-val safe">$0</div>
       </div>
     </div>
@@ -468,10 +490,13 @@
         </svg>
         拍攝商品標籤辨識
       </button>
+      <div class="tip-box">
+        💡 拍照小技巧：將鏡頭盡量靠緊價標數字，讓金額居中填滿畫面。
+      </div>
 
       <div class="ocr-status" id="ocrStatus">
         <div class="spinner"></div>
-        <span id="ocrText">正在辨識價標數字中...</span>
+        <span id="ocrText">正在進行影像增強與辨識...</span>
       </div>
     </div>
 
@@ -491,31 +516,36 @@
     <div id="budgetBadge" class="status-badge badge-safe">預算充裕</div>
   </div>
 
-  <!-- 辨識結果與金額確認彈窗 -->
+  <!-- 辨識確認視窗 -->
   <div class="modal-overlay" id="selectionModal">
     <div class="modal-content">
       <div class="modal-header">
-        <span class="modal-title">確認商品金額</span>
+        <span class="modal-title">確認金額加入清單</span>
         <button class="btn-close" id="closeModalBtn">&times;</button>
       </div>
 
-      <img id="previewImage" class="preview-img" alt="標籤預覽">
+      <div class="preview-container">
+        <img id="previewImage" class="preview-img" alt="增強處理後預覽">
+      </div>
 
-      <div class="candidates-label">點選辨識到的金額（最推薦已反藍）：</div>
+      <div class="candidates-label">點擊確認辨識金額（最推薦已反藍）：</div>
       <div class="candidates-list" id="candidatesList"></div>
 
-      <div class="candidates-label">或手動輸入/修改：</div>
+      <div class="candidates-label">或直接修改 / 手動輸入：</div>
       <div class="manual-entry">
-        <input type="text" id="manualNameInput" class="input-field" placeholder="商品名稱" style="flex: 1.2;">
+        <input type="text" id="manualNameInput" class="input-field" placeholder="品名" style="flex: 1.2;">
         <input type="number" id="manualPriceInput" class="input-field" placeholder="金額" inputmode="numeric" style="flex: 1;">
-        <button class="btn-add" id="confirmAddBtn">加入</button>
+        <button class="btn-add" id="confirmAddBtn">加入清單</button>
       </div>
     </div>
   </div>
 
+  <canvas id="processCanvas" style="display:none;"></canvas>
+
   <script>
     let cart = JSON.parse(localStorage.getItem('pwa_shopping_cart') || '[]');
     let budget = parseFloat(localStorage.getItem('pwa_shopping_budget') || '0');
+    let ocrWorker = null;
 
     const budgetInput = document.getElementById('budgetInput');
     const remainingCash = document.getElementById('remainingCash');
@@ -536,6 +566,7 @@
     const manualNameInput = document.getElementById('manualNameInput');
     const manualPriceInput = document.getElementById('manualPriceInput');
     const confirmAddBtn = document.getElementById('confirmAddBtn');
+    const processCanvas = document.getElementById('processCanvas');
 
     if (budget > 0) budgetInput.value = budget;
     renderCart();
@@ -550,24 +581,84 @@
       cameraInput.click();
     });
 
+    // 核心：影像自動增強處理（灰階化 + 對比度自適應拉伸 + 筆畫銳化）
+    function preprocessImage(file) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          const maxDim = 1200;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          processCanvas.width = width;
+          processCanvas.height = height;
+          const ctx = processCanvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const imgData = ctx.getImageData(0, 0, width, height);
+          const d = imgData.data;
+
+          let minLum = 255;
+          let maxLum = 0;
+          const lumArr = new Uint8Array(width * height);
+
+          for (let i = 0; i < d.length; i += 4) {
+            const lum = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+            lumArr[i / 4] = lum;
+            if (lum < minLum) minLum = lum;
+            if (lum > maxLum) maxLum = lum;
+          }
+
+          const range = (maxLum - minLum) || 1;
+          for (let i = 0; i < d.length; i += 4) {
+            const lum = lumArr[i / 4];
+            const stretched = ((lum - minLum) / range) * 255;
+            const binarized = stretched < 135 ? (stretched * 0.4) : Math.min(255, stretched * 1.25);
+            d[i] = binarized;
+            d[i + 1] = binarized;
+            d[i + 2] = binarized;
+          }
+
+          ctx.putImageData(imgData, 0, 0);
+          resolve(processCanvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
     cameraInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      const imageUrl = URL.createObjectURL(file);
-      previewImage.src = imageUrl;
-
       ocrStatus.style.display = 'flex';
-      ocrText.innerText = '正在讀取影像並辨識價標...';
+      ocrText.innerText = '正在增強影像對比度...';
       triggerScanBtn.disabled = true;
 
       try {
-        const worker = await Tesseract.createWorker('chi_tra+eng');
-        const ret = await worker.recognize(file);
-        await worker.terminate();
+        const enhancedImageUrl = await preprocessImage(file);
+        previewImage.src = enhancedImageUrl;
 
+        ocrText.innerText = '正在辨識價標數字...';
+
+        if (!ocrWorker) {
+          ocrWorker = await Tesseract.createWorker('eng+chi_tra');
+        }
+
+        const ret = await ocrWorker.recognize(enhancedImageUrl);
         const fullText = ret.data.text;
-        const candidates = extractPriceCandidates(fullText);
+        console.log("OCR 辨識文字內容:", fullText);
+
+        const candidates = extractSmartPrices(fullText);
         showSelectionModal(candidates);
 
       } catch (err) {
@@ -580,36 +671,50 @@
       }
     });
 
-    function extractPriceCandidates(text) {
-      const lines = text.split('\n');
-      const candidates = [];
-      const seen = new Set();
-      const priceRegex = /(?:NT\$?|[\$¥￥]|特價|特惠|售價|促銷|優惠)?\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)\s*(?:元)?/gi;
-      const yearRegex = /^(?:19|20)\d{2}$/;
+    function extractSmartPrices(text) {
+      const cleaned = text.replace(/[oO]/g, '0');
+      const lines = cleaned.split('\n');
+      const scoredMap = new Map();
+
+      const pattern = /(?:NT\$?|[\$¥￥]|特價|特惠|售價|促銷|優惠)?\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)\s*(?:元)?/gi;
+      const yearPattern = /^(?:19|20)\d{2}$/;
 
       for (let line of lines) {
-        let match;
         const lineTrim = line.trim();
-        while ((match = priceRegex.exec(lineTrim)) !== null) {
+        let match;
+        while ((match = pattern.exec(lineTrim)) !== null) {
           const rawNum = match[1];
           if (!rawNum) continue;
           const val = parseFloat(rawNum);
 
           if (isNaN(val) || val <= 0 || val > 99999) continue;
-          if (yearRegex.test(rawNum)) continue;
+          if (yearPattern.test(rawNum)) continue;
           if (rawNum.length >= 7) continue;
 
-          const isHighPriority = /[\$NT元特價售促]/.test(match[0]);
+          let score = 0;
 
-          if (!seen.has(val)) {
-            seen.add(val);
-            candidates.push({ price: val, priority: isHighPriority ? 2 : 1 });
+          if (val >= 10 && val <= 9999) {
+            score += 10;
+          } else if (val < 10) {
+            score += 1;
           }
+
+          if (/[\$NT元特價售促]/.test(match[0])) {
+            score += 20;
+          }
+
+          if (rawNum.includes('.')) score += 5;
+
+          const currentScore = scoredMap.get(val) || 0;
+          scoredMap.set(val, Math.max(currentScore, score));
         }
       }
 
-      candidates.sort((a, b) => b.priority - a.priority || b.price - a.price);
-      return candidates.map(c => c.price);
+      const candidates = Array.from(scoredMap.entries())
+        .sort((a, b) => b[1] - a[1] || b[0] - a[0])
+        .map(entry => entry[0]);
+
+      return candidates;
     }
 
     function showSelectionModal(candidates) {
@@ -618,7 +723,7 @@
       manualPriceInput.value = candidates.length > 0 ? candidates[0] : '';
 
       if (candidates.length === 0) {
-        candidatesList.innerHTML = '<span style="font-size:0.85rem;color:#94a3b8;">未偵測到明確金額，請手動填寫。</span>';
+        candidatesList.innerHTML = '<span style="font-size:0.85rem;color:#94a3b8;">未直接偵測到明確數字，請於下方手動輸入。</span>';
       } else {
         candidates.slice(0, 6).forEach((price, idx) => {
           const chip = document.createElement('button');
@@ -644,7 +749,7 @@
     confirmAddBtn.addEventListener('click', () => {
       const price = parseFloat(manualPriceInput.value);
       if (isNaN(price) || price <= 0) {
-        alert("請輸入有效的金額！");
+        alert("請輸入有效金額！");
         return;
       }
 
@@ -693,7 +798,7 @@
           <div class="empty-cart">
             <div style="font-size: 2.5rem; margin-bottom: 8px;">🛍️</div>
             <div>目前清單是空的</div>
-            <div style="font-size: 0.85rem; margin-top: 4px;">點擊上方按鈕拍攝價標！</div>
+            <div style="font-size: 0.85rem; margin-top: 4px;">點擊上方拍照按鈕開始累加！</div>
           </div>
         `;
       } else {
