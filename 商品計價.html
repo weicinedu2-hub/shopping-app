@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>商場購物即時算</title>
+  
+  <!-- iOS PWA 支援 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="購物加總器">
+  <meta name="theme-color" content="#2563eb">
+  
+  <!-- Tesseract.js 瀏覽器端 OCR 引擎 -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #f1f5f9;
+      color: #1e293b;
+      padding-bottom: 120px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      color: white;
+      padding: 16px 20px 20px;
+      border-radius: 0 0 24px 24px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .budget-card {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .budget-col {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .budget-label {
+      font-size: 0.8rem;
+      opacity: 0.9;
+      margin-bottom: 4px;
+    }
+
+    .budget-input-wrapper {
+      display: flex;
+      align-items: center;
+      background: white;
+      border-radius: 8px;
+      padding: 2px 8px;
+      color: #1e293b;
+    }
+
+    .budget-input-wrapper span {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+
+    .budget-input {
+      width: 100%;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 6px 4px;
+      color: #0f172a;
+    }
+
+    .remaining-val {
+      font-size: 1.25rem;
+      font-weight: 800;
+      margin-top: 4px;
+    }
+
+    .safe { color: #86efac; }
+    .warning { color: #fde047; }
+    .danger { color: #fca5a5; }
+
+    main {
+      padding: 16px;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    .scan-section {
+      background: white;
+      border-radius: 20px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+      margin-bottom: 20px;
+    }
+
+    .btn-camera {
+      width: 100%;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      transition: all 0.2s;
+    }
+
+    .btn-camera:active {
+      transform: scale(0.98);
+      background: #1d4ed8;
+    }
+
+    .ocr-status {
+      margin-top: 14px;
+      font-size: 0.9rem;
+      color: #64748b;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      justify-content: center;
+      align-items: flex-end;
+    }
+
+    .modal-content {
+      background: white;
+      width: 100%;
+      max-width: 540px;
+      border-radius: 24px 24px 0 0;
+      padding: 24px 20px;
+      animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .btn-close {
+      background: #f1f5f9;
+      border: none;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      color: #64748b;
+    }
+
+    .preview-img {
+      width: 100%;
+      max-height: 160px;
+      object-fit: contain;
+      background: #000;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .candidates-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    .candidates-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .price-chip {
+      background: #eff6ff;
+      border: 2px solid #bfdbfe;
+      color: #1d4ed8;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+
+    .price-chip.recommended {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: white;
+      box-shadow: 0 3px 8px rgba(37, 99, 235, 0.3);
+    }
+
+    .price-chip:active {
+      transform: scale(0.95);
+    }
+
+    .manual-entry {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .input-field {
+      flex: 1;
+      padding: 12px 14px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .input-field:focus {
+      border-color: #2563eb;
+    }
+
+    .btn-add {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .cart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 0 4px;
+    }
+
+    .cart-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .btn-clear {
+      background: none;
+      border: none;
+      color: #ef4444;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .item-card {
+      background: white;
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+    }
+
+    .item-info {
+      flex: 1;
+    }
+
+    .item-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 2px;
+    }
+
+    .item-unit-price {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .qty-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 16px;
+    }
+
+    .btn-qty {
+      background: #f1f5f9;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      color: #334155;
+    }
+
+    .item-qty {
+      font-weight: 700;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .item-subtotal {
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: #0f172a;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .btn-del {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.2rem;
+      margin-left: 12px;
+      cursor: pointer;
+    }
+
+    .empty-cart {
+      text-align: center;
+      padding: 40px 20px;
+      color: #94a3b8;
+    }
+
+    .summary-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid #e2e8f0;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+      z-index: 50;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    .total-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .total-count {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .total-amount {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: #1d4ed8;
+    }
+
+    .status-badge {
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .badge-safe { background: #dcfce7; color: #15803d; }
+    .badge-warn { background: #fef9c3; color: #854d0e; }
+    .badge-danger { background: #fee2e2; color: #b91c1c; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-title">
+      <span>🛒 購物即時算 (PWA)</span>
+      <span style="font-size: 0.85rem; opacity: 0.9; font-weight: normal;">離線支援</span>
+    </div>
+    <div class="budget-card">
+      <div class="budget-col">
+        <span class="budget-label">💵 攜帶現金 (預算)</span>
+        <div class="budget-input-wrapper">
+          <span>$</span>
+          <input type="number" id="budgetInput" class="budget-input" placeholder="例如 1000" inputmode="numeric">
+        </div>
+      </div>
+      <div class="budget-col" style="text-align: right;">
+        <span class="budget-label">剩餘可用金額</span>
+        <div id="remainingCash" class="remaining-val safe">$0</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="scan-section">
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+      <button class="btn-camera" id="triggerScanBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+        拍攝商品標籤辨識
+      </button>
+
+      <div class="ocr-status" id="ocrStatus">
+        <div class="spinner"></div>
+        <span id="ocrText">正在辨識價標數字中...</span>
+      </div>
+    </div>
+
+    <div class="cart-header">
+      <span class="cart-title">購物清單</span>
+      <button class="btn-clear" id="clearCartBtn">清空全部</button>
+    </div>
+
+    <div id="cartItems"></div>
+  </main>
+
+  <div class="summary-bar">
+    <div class="total-info">
+      <span class="total-count" id="itemCountLabel">共 0 件商品</span>
+      <span class="total-amount" id="totalAmountLabel">$0</span>
+    </div>
+    <div id="budgetBadge" class="status-badge badge-safe">預算充裕</div>
+  </div>
+
+  <!-- 辨識結果與金額確認彈窗 -->
+  <div class="modal-overlay" id="selectionModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title">確認商品金額</span>
+        <button class="btn-close" id="closeModalBtn">&times;</button>
+      </div>
+
+      <img id="previewImage" class="preview-img" alt="標籤預覽">
+
+      <div class="candidates-label">點選辨識到的金額（最推薦已反藍）：</div>
+      <div class="candidates-list" id="candidatesList"></div>
+
+      <div class="candidates-label">或手動輸入/修改：</div>
+      <div class="manual-entry">
+        <input type="text" id="manualNameInput" class="input-field" placeholder="商品名稱" style="flex: 1.2;">
+        <input type="number" id="manualPriceInput" class="input-field" placeholder="金額" inputmode="numeric" style="flex: 1;">
+        <button class="btn-add" id="confirmAddBtn">加入</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let cart = JSON.parse(localStorage.getItem('pwa_shopping_cart') || '[]');
+    let budget = parseFloat(localStorage.getItem('pwa_shopping_budget') || '0');
+
+    const budgetInput = document.getElementById('budgetInput');
+    const remainingCash = document.getElementById('remainingCash');
+    const triggerScanBtn = document.getElementById('triggerScanBtn');
+    const cameraInput = document.getElementById('cameraInput');
+    const ocrStatus = document.getElementById('ocrStatus');
+    const ocrText = document.getElementById('ocrText');
+    const cartItems = document.getElementById('cartItems');
+    const itemCountLabel = document.getElementById('itemCountLabel');
+    const totalAmountLabel = document.getElementById('totalAmountLabel');
+    const budgetBadge = document.getElementById('budgetBadge');
+    const clearCartBtn = document.getElementById('clearCartBtn');
+
+    const selectionModal = document.getElementById('selectionModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const previewImage = document.getElementById('previewImage');
+    const candidatesList = document.getElementById('candidatesList');
+    const manualNameInput = document.getElementById('manualNameInput');
+    const manualPriceInput = document.getElementById('manualPriceInput');
+    const confirmAddBtn = document.getElementById('confirmAddBtn');
+
+    if (budget > 0) budgetInput.value = budget;
+    renderCart();
+
+    budgetInput.addEventListener('input', (e) => {
+      budget = parseFloat(e.target.value) || 0;
+      localStorage.setItem('pwa_shopping_budget', budget);
+      updateSummary();
+    });
+
+    triggerScanBtn.addEventListener('click', () => {
+      cameraInput.click();
+    });
+
+    cameraInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const imageUrl = URL.createObjectURL(file);
+      previewImage.src = imageUrl;
+
+      ocrStatus.style.display = 'flex';
+      ocrText.innerText = '正在讀取影像並辨識價標...';
+      triggerScanBtn.disabled = true;
+
+      try {
+        const worker = await Tesseract.createWorker('chi_tra+eng');
+        const ret = await worker.recognize(file);
+        await worker.terminate();
+
+        const fullText = ret.data.text;
+        const candidates = extractPriceCandidates(fullText);
+        showSelectionModal(candidates);
+
+      } catch (err) {
+        console.error("OCR 辨識失敗:", err);
+        showSelectionModal([]);
+      } finally {
+        ocrStatus.style.display = 'none';
+        triggerScanBtn.disabled = false;
+        cameraInput.value = '';
+      }
+    });
+
+    function extractPriceCandidates(text) {
+      const lines = text.split('\n');
+      const candidates = [];
+      const seen = new Set();
+      const priceRegex = /(?:NT\$?|[\$¥￥]|特價|特惠|售價|促銷|優惠)?\s*([0-9]{1,5}(?:\.[0-9]{1,2})?)\s*(?:元)?/gi;
+      const yearRegex = /^(?:19|20)\d{2}$/;
+
+      for (let line of lines) {
+        let match;
+        const lineTrim = line.trim();
+        while ((match = priceRegex.exec(lineTrim)) !== null) {
+          const rawNum = match[1];
+          if (!rawNum) continue;
+          const val = parseFloat(rawNum);
+
+          if (isNaN(val) || val <= 0 || val > 99999) continue;
+          if (yearRegex.test(rawNum)) continue;
+          if (rawNum.length >= 7) continue;
+
+          const isHighPriority = /[\$NT元特價售促]/.test(match[0]);
+
+          if (!seen.has(val)) {
+            seen.add(val);
+            candidates.push({ price: val, priority: isHighPriority ? 2 : 1 });
+          }
+        }
+      }
+
+      candidates.sort((a, b) => b.priority - a.priority || b.price - a.price);
+      return candidates.map(c => c.price);
+    }
+
+    function showSelectionModal(candidates) {
+      candidatesList.innerHTML = '';
+      manualNameInput.value = `商品 ${cart.length + 1}`;
+      manualPriceInput.value = candidates.length > 0 ? candidates[0] : '';
+
+      if (candidates.length === 0) {
+        candidatesList.innerHTML = '<span style="font-size:0.85rem;color:#94a3b8;">未偵測到明確金額，請手動填寫。</span>';
+      } else {
+        candidates.slice(0, 6).forEach((price, idx) => {
+          const chip = document.createElement('button');
+          chip.className = `price-chip ${idx === 0 ? 'recommended' : ''}`;
+          chip.innerHTML = `<span>$${price}</span>`;
+          chip.onclick = () => {
+            document.querySelectorAll('.price-chip').forEach(c => c.classList.remove('recommended'));
+            chip.classList.add('recommended');
+            manualPriceInput.value = price;
+          };
+          candidatesList.appendChild(chip);
+        });
+      }
+
+      selectionModal.style.display = 'flex';
+      manualPriceInput.focus();
+    }
+
+    closeModalBtn.addEventListener('click', () => {
+      selectionModal.style.display = 'none';
+    });
+
+    confirmAddBtn.addEventListener('click', () => {
+      const price = parseFloat(manualPriceInput.value);
+      if (isNaN(price) || price <= 0) {
+        alert("請輸入有效的金額！");
+        return;
+      }
+
+      const name = manualNameInput.value.trim() || `商品 ${cart.length + 1}`;
+      addToCart(name, price);
+      selectionModal.style.display = 'none';
+    });
+
+    function addToCart(name, price) {
+      cart.push({ id: Date.now(), name, price, qty: 1 });
+      saveCart();
+      renderCart();
+    }
+
+    function updateQty(id, delta) {
+      const item = cart.find(i => i.id === id);
+      if (!item) return;
+      item.qty += delta;
+      if (item.qty <= 0) cart = cart.filter(i => i.id !== id);
+      saveCart();
+      renderCart();
+    }
+
+    function deleteItem(id) {
+      cart = cart.filter(i => i.id !== id);
+      saveCart();
+      renderCart();
+    }
+
+    clearCartBtn.addEventListener('click', () => {
+      if (cart.length === 0) return;
+      if (confirm("確定要清空所有商品項目嗎？")) {
+        cart = [];
+        saveCart();
+        renderCart();
+      }
+    });
+
+    function saveCart() {
+      localStorage.setItem('pwa_shopping_cart', JSON.stringify(cart));
+    }
+
+    function renderCart() {
+      if (cart.length === 0) {
+        cartItems.innerHTML = `
+          <div class="empty-cart">
+            <div style="font-size: 2.5rem; margin-bottom: 8px;">🛍️</div>
+            <div>目前清單是空的</div>
+            <div style="font-size: 0.85rem; margin-top: 4px;">點擊上方按鈕拍攝價標！</div>
+          </div>
+        `;
+      } else {
+        cartItems.innerHTML = cart.map(item => `
+          <div class="item-card">
+            <div class="item-info">
+              <div class="item-name">${escapeHtml(item.name)}</div>
+              <div class="item-unit-price">單價 $${item.price}</div>
+            </div>
+            <div class="qty-controls">
+              <button class="btn-qty" onclick="updateQty(${item.id}, -1)">-</button>
+              <span class="item-qty">${item.qty}</span>
+              <button class="btn-qty" onclick="updateQty(${item.id}, 1)">+</button>
+            </div>
+            <div class="item-subtotal">$${item.price * item.qty}</div>
+            <button class="btn-del" onclick="deleteItem(${item.id})">&times;</button>
+          </div>
+        `).join('');
+      }
+      updateSummary();
+    }
+
+    function updateSummary() {
+      const totalCount = cart.reduce((sum, item) => sum + item.qty, 0);
+      const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+      itemCountLabel.innerText = `共 ${totalCount} 件商品`;
+      totalAmountLabel.innerText = `$${totalAmount}`;
+
+      if (budget > 0) {
+        const remaining = budget - totalAmount;
+        remainingCash.innerText = `$${remaining}`;
+
+        if (remaining < 0) {
+          remainingCash.className = 'remaining-val danger';
+          budgetBadge.className = 'status-badge badge-danger';
+          budgetBadge.innerText = `⚠️ 現金不足 (超支 $${Math.abs(remaining)})`;
+        } else if (remaining <= budget * 0.2) {
+          remainingCash.className = 'remaining-val warning';
+          budgetBadge.className = 'status-badge badge-warn';
+          budgetBadge.innerText = `注意：剩餘現金低於 20%`;
+        } else {
+          remainingCash.className = 'remaining-val safe';
+          budgetBadge.className = 'status-badge badge-safe';
+          budgetBadge.innerText = `預算充裕 (餘 $${remaining})`;
+        }
+      } else {
+        remainingCash.innerText = '未設上限';
+        remainingCash.className = 'remaining-val safe';
+        budgetBadge.className = 'status-badge badge-safe';
+        budgetBadge.innerText = '累計中';
+      }
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    if ('serviceWorker' in navigator) {
+      const swCode = `self.addEventListener('install', e => self.skipWaiting());`;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+    }
+  </script>
+</body>
+</html>
